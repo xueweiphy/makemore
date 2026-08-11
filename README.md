@@ -10,6 +10,7 @@ copied.
 | bigram, counted | 1 char | 2.4546 | 11.6 |
 | bigram, gradient descent | 1 char | ≈ 2.45 | ≈ 11.6 |
 | MLP with embeddings | `block_size` (3 by default) | see below | |
+| MLP + BatchNorm, √fan_in init | `block_size` (3 by default) | fill in after running | |
 
 Perplexity reads as an effective number of choices: one character of context
 narrows the next character from 27 possibilities to about 12. The loss cannot
@@ -110,6 +111,62 @@ There is no learning-rate schedule. The rate is constant for the whole run.
 
 ---
 
+# 3. BatchNorm and activation diagnostics
+
+Following makemore 3. Run with `python batchnorm.py`.
+
+The MLP above trains, but only because it is shallow. This step builds the
+tools that show *why* it would fail deeper, then the layer that makes depth
+safe.
+
+## Module-ized layers
+
+The monolithic forward pass becomes composable classes — `Layer`,
+`BatchNorm1d`, `Tanh` — each holding its parameters and its output. This is
+`torch.nn.Module` rebuilt by hand: the network is a list, the forward pass is
+a loop.
+
+## Initialization: divide by √fan_in
+
+A pre-activation is a sum of `fan_in` independent terms. For zero-mean
+$x_i$ and $W_{ij}$, variances multiply and then add:
+
+$$\mathrm{Var}\Big(\sum_i x_i W_{ij}\Big) = n_{\text{in}}\,\sigma_w^2$$
+
+so plain `randn` weights give the sum a width of $\sqrt{n_{\text{in}}}$ —
+random-walk scaling. tanh then saturates at $\pm 1$, and saturated units pass
+almost no gradient. Dividing the weights by $\sqrt{n_{\text{in}}}$ restores
+unit variance at every layer. (Note that ordinary error propagation *misses*
+this: it linearizes around the mean, and here the means are zero — the
+variance product term it drops is the whole effect.)
+
+## BatchNorm
+
+`BatchNorm1d` standardizes each hidden unit over the minibatch, then lets the
+network undo it where useful via learned `gamma`, `beta`. Training uses batch
+statistics; inference uses running averages accumulated with momentum — the
+train/inference asymmetry is the subtle part, and it is why the class carries
+`running_mean` / `running_var` alongside the learned parameters.
+
+## Diagnostics
+
+`batchnorm.py` ends with the lecture's diagnostic panel, written before
+watching his version: tanh activation histograms with the saturation
+fraction (|h| > 0.97), gradient histograms per layer, and the loss curve.
+
+![BatchNorm diagnostics](batchnorm_diag.png)
+
+## A bug worth remembering
+
+The first version of this network excluded the embedding matrix $C$ from the
+parameter list. Nothing crashed — the loss still fell, the samples still
+looked name-like — but the embeddings stayed frozen at their random initial
+values for the entire run. Silent failure is the default failure mode of
+neural networks; the diagnostics above exist because errors here do not
+announce themselves.
+
+---
+
 ## Files
 
 | File | |
@@ -117,8 +174,9 @@ There is no learning-rate schedule. The rate is constant for the whole run.
 | `bigram.py` | both bigram models, sampling, figures |
 | `MLP.py` | the MLP class |
 | `example_MLP.py` | one configured MLP experiment, with baselines and diagnostics |
+| `batchnorm.py` | module-ized layers, BatchNorm, activation/gradient diagnostics |
 | `names.txt` | 32k names, one per line |
-| `bigram.png`, `mlp_loss.png` | generated figures |
+| `bigram.png`, `mlp_loss.png`, `batchnorm_diag.png` | generated figures |
 
 ## Notes
 
@@ -136,6 +194,6 @@ the lookup.
 
 ## Next
 
-makemore 3: initialisation scale, activation statistics and BatchNorm — why the
-`randn` above is wrong. Then makemore 4, the backward pass computed by hand for
-every parameter and checked against autograd.
+makemore 4: the backward pass computed by hand for every parameter and checked
+against autograd. Then makemore 5, WaveNet — hierarchical context instead of a
+flat concatenation.
