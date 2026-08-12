@@ -175,6 +175,7 @@ announce themselves.
 | `MLP.py` | the MLP class |
 | `example_MLP.py` | one configured MLP experiment, with baselines and diagnostics |
 | `batchnorm.py` | module-ized layers, BatchNorm, activation/gradient diagnostics |
+| `init_scaling.py` | deep tanh stack, no BatchNorm: break the init (10×, 0.1×), watch the histograms fail |
 | `names.txt` | 32k names, one per line |
 | `bigram.png`, `mlp_loss.png`, `batchnorm_diag.png` | generated figures |
 

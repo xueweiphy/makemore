@@ -148,6 +148,22 @@ class MLP :
         return F.cross_entropy ( logits, self.Ydic[data] ).item()
 
 
+    def pred_word ( self ) :
+        context = [0]* self.block_size
+        ww =[]
+        while True :
+            logits = self.forward ( context )
+            prob = torch.softmax ( logits ,dim = -1) 
+            xi =torch.multinomial ( prob, num_samples =1 , replacement=False )
+            
+            context = context [1:] + [xi.item()]
+            ww = ww+ [self.itos[xi.item()] ]
+            if xi  ==0  :
+                break
+
+        word = ''.join ( ww ) 
+        return word
+
 if __name__ == "__main__":
     # A smoke test only -- see example_MLP.py for the full run with baselines,
     # diagnostics and the loss figure.
@@ -159,5 +175,10 @@ if __name__ == "__main__":
     myclass.init_params()
     myclass.evo_loss ( data ='train', numRun = 1000 )
 
+
     print ( f"train loss {myclass.evaluate('train'):.4f}" )
     print ( f"dev   loss {myclass.evaluate('dev'):.4f}" )
+
+    ww =myclass.pred_word()
+    
+    print ( ww)
