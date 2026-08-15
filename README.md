@@ -11,6 +11,7 @@ copied.
 | bigram, gradient descent | 1 char | ≈ 2.45 | ≈ 11.6 |
 | MLP with embeddings | `block_size` (3 by default) | see below | |
 | MLP + BatchNorm, √fan_in init | `block_size` (3 by default) | fill in after running | |
+| the same net, trained on hand-written gradients | 3 chars | 2.14 (dev) | 8.5 |
 
 Perplexity reads as an effective number of choices: one character of context
 narrows the next character from 27 possibilities to about 12. The loss cannot
@@ -167,6 +168,67 @@ announce themselves.
 
 ---
 
+# 4. The backward pass by hand
+
+Following makemore 4 ("backprop ninja"). Run with `python backprop_manual.py`:
+the gradient checks and a 1000-step training smoke test take about three
+seconds, and `max_steps` at the top takes it to the full run.
+
+The forward pass is decomposed into ~20 named tensors, the gradient of every
+one is written by hand and checked against autograd with `cmp()`. Three places
+deserve their derivations (written up in `exec/Backprop_manual.tex`):
+
+**Two-path nodes.** `counts` feeds the loss through `probs` *and* through
+`counts_sum`; `bndiff` through `bnraw` *and* `bndiff2`. Miss either second
+path and `cmp` fails by exactly that term — this is why autograd accumulates
+with `+=`.
+
+**The max-shift gradient is zero.** Softmax is invariant under a constant
+shift of the logits row, so `dlogit_maxes` vanishes identically — the
+stability subtraction is a gauge choice.
+
+**The batch mean couples examples.** $\partial\mathcal{L}/\partial h_{\beta j}$
+picks up $-\frac{1}{n}\sum_\alpha$ over the whole batch, because every example
+entered the mean. This is what makes BatchNorm's backward the hard one, and it
+is the gradient-side face of why BatchNorm normalizes over the batch.
+
+## The fused forms
+
+Nine of those tensors exist only to be cancelled. Softmax and cross-entropy
+collapse to
+
+$$\frac{\partial \mathcal{L}}{\partial Z_{\beta j}} = \frac{P_{\beta j} - Y_{\beta j}}{n}$$
+
+which is what `F.cross_entropy` computes internally, and BatchNorm to
+
+$$\frac{\partial \mathcal{L}}{\partial h_{\beta j}} = \frac{1}{\sigma_j}\left[
+\dot{\hat h}_{\beta j} - \overline{\dot{\hat h}_{\cdot j}}
+- \frac{1}{n-1}\,\hat h_{\beta j} \sum_\alpha \hat h_{\alpha j}\dot{\hat h}_{\alpha j}
+\right]$$
+
+with $\hat h$ the normalised activation and $\dot{\hat h}$ its gradient. The
+last two terms are batch sums — the mean coupling and the variance coupling —
+which is exactly why this gradient cannot be written one example at a time;
+the $1/(n-1)$ is Bessel's correction surviving into the gradient. Neither
+fused form is bit-exact against autograd, and that is the point: the same
+terms summed in a different order, agreeing to ~1e-9.
+
+## Training without autograd
+
+The loop runs entirely inside `torch.no_grad()`. No graph is built,
+`.backward()` is never called, and the expressions above are the only
+gradients in existence. 200k steps land at train 2.11 / dev 2.14 — where the
+autograd version lands, which is the check that matters. BatchNorm is
+calibrated in a single pass at the end rather than by the running averages
+`batchnorm.py` accumulates during training.
+
+One caveat on `cmp()`: bit-exactness is a property of the torch build, not of
+the algebra. Newer versions use a different tanh backward kernel, and every
+line from `dhpreact` on drops to `approximate: True` at ~1e-9 while staying
+exactly right. Only a failing `approximate` is an actual error.
+
+---
+
 ## Files
 
 | File | |
@@ -176,6 +238,7 @@ announce themselves.
 | `example_MLP.py` | one configured MLP experiment, with baselines and diagnostics |
 | `batchnorm.py` | module-ized layers, BatchNorm, activation/gradient diagnostics |
 | `init_scaling.py` | deep tanh stack, no BatchNorm: break the init (10×, 0.1×), watch the histograms fail |
+| `backprop_manual.py` | makemore 4: every gradient by hand, the fused forms, and a training run with autograd switched off |
 | `names.txt` | 32k names, one per line |
 | `bigram.png`, `mlp_loss.png`, `batchnorm_diag.png` | generated figures |
 
@@ -195,6 +258,6 @@ the lookup.
 
 ## Next
 
-makemore 4: the backward pass computed by hand for every parameter and checked
-against autograd. Then makemore 5, WaveNet — hierarchical context instead of a
-flat concatenation.
+makemore 5, WaveNet — hierarchical context instead of a flat concatenation:
+characters combined in pairs, then pairs of pairs, so the context window can
+grow past three without the first layer swallowing everything at once.

@@ -53,26 +53,33 @@ class Tanh:
         return []
 
 
-# ----------------------------------------------------------------------
-# Configuration
-# ----------------------------------------------------------------------
-
-block_size = 3
-embd_dim   = 4
-h_dim      = 100
-minb_size  = 32
-numRun     = 0            # 0 = diagnostics at initialization only
-lr         = 0.1
-
-gain       = 5. / 3.      # tanh gain (Kaiming), the principled knob
-w_scale    = 10.0         # the sabotage knob: try 1.0, 10.0, 0.1
-last_squash = 0.1         # last-layer factor: small logits, honest initial loss
-
-seed       = 2147483647
-split_seed = 42
-
 
 if __name__ == "__main__":
+
+
+
+
+    # ----------------------------------------------------------------------
+    # Configuration
+    # ----------------------------------------------------------------------
+
+    block_size = 3
+    embd_dim   = 4
+    h_dim      = 100
+    minb_size  = 32
+    numRun     = 0            # 0 = diagnostics at initialization only
+    lr         = 0.1
+
+    gain       = 5. / 3.      # tanh gain (Kaiming), the principled knob
+    w_scale    = 10.0         # the sabotage knob: try 1.0, 10.0, 0.1
+    last_squash = 0.1         # last-layer factor: small logits, honest initial loss
+
+    seed       = 2147483647
+    split_seed = 42
+
+
+
+
     words = open("names.txt", "r").read().splitlines()
 
     model = MLP(words, block_size, embd_dim, h_dim, seed=seed)

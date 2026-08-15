@@ -12,14 +12,17 @@ import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
-from MLP import MLP  # reused only for makeXY / build_data / vocabulary
+try  :
+    from MLP import MLP  # reused only for makeXY / build_data / vocabulary
+except :
+    from .MLP import MLP  
 
 
 # ----------------------------------------------------------------------
 # Layers
 # ----------------------------------------------------------------------
 
-class Layer:
+class Linear:
     def __init__(self, fan_in, fan_out, bias=True):
         # randn has std 1; a pre-activation is a sum of fan_in such terms, so
         # its std would be sqrt(fan_in).  Dividing by sqrt(fan_in) keeps the
@@ -74,28 +77,33 @@ class Tanh:
         return []
 
 
-# ----------------------------------------------------------------------
-# Configuration
-# ----------------------------------------------------------------------
-
-block_size = 3           # characters of context
-embd_dim   = 4           # embedding dimension per character
-h_dim      = 100         # hidden units
-minb_size  = 32          # minibatch size
-numRun     = 50000       # training steps
-lr         = 0.1         # learning rate, first phase
-lr2        = 0.01        # learning rate after lr_decay_step
-lr_decay_step = 100000
-
-seed       = 2147483647
-split_seed = 42
-
-
-# ----------------------------------------------------------------------
-# Data and model
-# ----------------------------------------------------------------------
 
 if __name__ == "__main__":
+
+
+
+    # ----------------------------------------------------------------------
+    # Configuration
+    # ----------------------------------------------------------------------
+
+    block_size = 3           # characters of context
+    embd_dim   = 4           # embedding dimension per character
+    h_dim      = 100         # hidden units
+    minb_size  = 32          # minibatch size
+    numRun     = 50000       # training steps
+    lr         = 0.1         # learning rate, first phase
+    lr2        = 0.01        # learning rate after lr_decay_step
+    lr_decay_step = 100000
+
+    seed       = 2147483647
+    split_seed = 42
+
+
+    # ----------------------------------------------------------------------
+    # Data and model
+    # ----------------------------------------------------------------------
+
+
     words = open("names.txt", "r").read().splitlines()
 
     model = MLP(words, block_size, embd_dim, h_dim, seed=seed)
@@ -108,8 +116,8 @@ if __name__ == "__main__":
 
     C = torch.randn((volc_dim, embd_dim))
     Layers = [
-        Layer(embd_dim * block_size, h_dim), BatchNorm1d(h_dim), Tanh(),
-        Layer(h_dim, volc_dim),
+        Linear(embd_dim * block_size, h_dim), BatchNorm1d(h_dim), Tanh(),
+        Linear(h_dim, volc_dim),
     ]
 
     # C must be in params too -- left out, the embeddings stay frozen at their
